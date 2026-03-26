@@ -1,0 +1,11 @@
+add_executable(FungArtery FungArtery.cpp)
+target_link_libraries(FungArtery PRIVATE mfem TLIntegs)
+
+add_executable(FungLigament FungLigament.cpp)
+target_link_libraries(FungLigament PRIVATE mfem TLIntegs)
+
+add_executable(HyperElasticArtery HyperElasticArtery.cpp)
+target_link_libraries(HyperElasticArtery PRIVATE mfem TLIntegs)
+
+add_executable(HyperElasticLigament HyperElasticLigament.cpp)
+target_link_libraries(HyperElasticLigament PRIVATE mfem TLIntegs)

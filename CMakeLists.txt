@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(FungIntegratorProject CXX)
+find_package(MFEM REQUIRED)
+add_subdirectory(src)
+add_subdirectory(example_problems)
