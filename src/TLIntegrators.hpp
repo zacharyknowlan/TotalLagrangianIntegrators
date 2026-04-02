@@ -7,7 +7,7 @@ class FungExponentialIntegrator : public mfem::NonlinearFormIntegrator
 {
     private:
 
-        // Matrices used for element residual/jacobian computation
+        // Matrices used for element residual/gradient computation
         mfem::DenseMatrix Gradu_, F_, S_, E_, A_, dSdu_;
         mfem::DenseMatrix dNdeta_, dNdx_, dLambdadE_, tmp1_;
 
@@ -43,13 +43,36 @@ class FungExponentialIntegrator : public mfem::NonlinearFormIntegrator
                                     mfem::Coefficient& A3, mfem::Coefficient& A4, mfem::Coefficient& A5,
                                     mfem::Coefficient& A6);
 
-        void AssembleElementVector(const mfem::FiniteElement& el,
-                                    mfem::ElementTransformation& Tr,
-                                    const mfem::Vector& elfun, mfem::Vector& elvect);
+        void AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                    const mfem::Vector& elfun, mfem::Vector& elvect) override;
 
-        void AssembleElementGrad(const mfem::FiniteElement& el,
-                                    mfem::ElementTransformation& Tr,
-                                    const mfem::Vector& elfun, mfem::DenseMatrix& elmat);
+        void AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                    const mfem::Vector& elfun, mfem::DenseMatrix& elmat) override;
+};
+
+class HyperElasticIntegrator : public mfem::NonlinearFormIntegrator
+{
+    private:
+
+        // Matrices used for element residual/gradient computation
+        mfem::DenseMatrix Gradu_, F_, S_, dSdu_, tmp1_, dNdeta_, dNdx_;
+
+        // Material property values
+        double mu_, lambda_;
+
+        // Material property coefficients
+        mfem::Array<mfem::Coefficient*> mat_props_;
+
+    public:
+
+        HyperElasticIntegrator(mfem::Coefficient& mu, mfem::Coefficient& lambda);
+
+        void AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                    const mfem::Vector& elfun, mfem::Vector& elvect) override;
+
+        void AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                    const mfem::Vector& elfun, mfem::DenseMatrix& elmat) override;
+
 };
 
 #endif

@@ -145,8 +145,6 @@ void FEI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTran
     }
 }
 
-
-
 void FEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
                                 const mfem::Vector& elfun, mfem::DenseMatrix& elmat)
     {
@@ -274,6 +272,219 @@ void FEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
                             for (int m=0; m<dim; m++)
                             {
                                 elmat(I,J) += dNdx_(B,j) * S_(j,m) * dNdx_(H,m) * (i==v) * int_point.weight * Tr.Weight();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+using HEI = HyperElasticIntegrator;
+
+HEI::HyperElasticIntegrator(mfem::Coefficient& mu, mfem::Coefficient& lambda)
+{
+    mat_props_.SetSize(2);
+    mat_props_[0] = &mu;
+    mat_props_[1] = &lambda;
+}
+
+void HEI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                const mfem::Vector& elfun, mfem::Vector& elvect)
+{
+    int I; // Aux. index;
+    int dof = el.GetDof();
+    int dim = Tr.GetSpaceDim();
+
+    dNdeta_.SetSize(dof, dim);
+    dNdx_.SetSize(dof, dim);   
+    Gradu_.SetSize(dim);
+    F_.SetSize(dim);
+    S_.SetSize(dim);
+    tmp1_.SetSize(dim);
+    elvect.SetSize(dof*dim);
+
+    const mfem::IntegrationRule *ir= &mfem::IntRules.Get(el.GetGeomType(), 3*el.GetOrder());
+
+    elvect = 0.; // Initialize element residual vector to zero
+    for (int ip=0; ip<ir->GetNPoints(); ip++)
+    {
+        const mfem::IntegrationPoint &int_point = ir->IntPoint(ip);
+        Tr.SetIntPoint(&int_point);
+        el.CalcDShape(int_point, dNdeta_);
+        mfem::Mult(dNdeta_, Tr.InverseJacobian(), dNdx_);
+
+        mu_ = mat_props_[0]->Eval(Tr,int_point) * int_point.weight * Tr.Weight();
+        lambda_ = mat_props_[1]->Eval(Tr,int_point) * int_point.weight * Tr.Weight();
+
+        // Compute displacement and deformation gradient 
+        Gradu_ = 0.;
+        for (int i=0; i<dim; i++)
+        {
+            for (int j=0; j<dim; j++)
+            {
+                for (int C=0; C<dof; C++)
+                {
+                    Gradu_(i,j) += dNdx_(C,j)*elfun[i*dof+C];
+                }
+                F_(i,j) = Gradu_(i,j) + static_cast<double>(i==j);
+            }
+        }
+
+        // Compute stress measure S
+        S_ = 0.;
+        for (int k=0; k<dim; k++)
+        {
+            for (int m=0; m<dim; m++)
+            {
+                S_(k,m) += mu_*(Gradu_(k,m)+Gradu_(m,k));
+
+                for (int p=0; p<dim; p++)
+                {
+                    S_(k,m) += lambda_*Gradu_(p,p)*(k==m);
+                    S_(k,m) += mu_*Gradu_(p,k)*Gradu_(p,m);
+
+                    for (int r=0; r<dim; r++)
+                    {
+                        S_(k,m) += lambda_*(Gradu_(r,p)*Gradu_(r,p)/2.)*(k==m);
+                    }
+                }
+            }
+        }
+
+        // Transform S
+        mfem::MultABt(S_, F_, tmp1_);
+
+        // Compute the residual vector
+        for (int i=0; i<dim; i++)
+        {
+            for (int B=0; B<dof; B++)
+            {
+                I = i*dof+B;
+                for (int j=0; j<dim; j++)
+                {
+                    elvect[I] += dNdx_(B,j)*tmp1_(j,i); // Transposed
+                }
+            }
+        }
+    }
+}
+
+void HEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                const mfem::Vector& elfun, mfem::DenseMatrix& elmat)
+{
+    int I, J; // Aux. indices
+    int dof = el.GetDof();
+    int dim = Tr.GetSpaceDim();
+
+    dNdeta_.SetSize(dof, dim);
+    dNdx_.SetSize(dof, dim);   
+    Gradu_.SetSize(dim);
+    F_.SetSize(dim);
+    S_.SetSize(dim);
+    dSdu_.SetSize(dim*dim, dof*dim);
+    tmp1_.SetSize(dim*dim, dof*dim);
+    elmat.SetSize(dof*dim, dof*dim);
+
+    const mfem::IntegrationRule *ir= &mfem::IntRules.Get(el.GetGeomType(), 3*el.GetOrder());
+
+    elmat = 0.; // Set element gradient matrix to zero
+    for (int ip=0; ip<ir->GetNPoints(); ip++)
+    {
+        const mfem::IntegrationPoint &int_point = ir->IntPoint(ip);
+        Tr.SetIntPoint(&int_point);
+        el.CalcDShape(int_point, dNdeta_);
+        mfem::Mult(dNdeta_, Tr.InverseJacobian(), dNdx_);
+
+        mu_ = mat_props_[0]->Eval(Tr, int_point) * int_point.weight * Tr.Weight();
+        lambda_ = mat_props_[1]->Eval(Tr, int_point) * int_point.weight * Tr.Weight();
+
+        // Compute the displacement and deformation gradients
+        Gradu_ = 0.;
+        for (int i=0; i<dim; i++)
+        {
+            for (int j=0; j<dim; j++)
+            {
+                for (int C=0; C<dof; C++)
+                {
+                    Gradu_(i,j) += dNdx_(C,j)*elfun[i*dof+C];
+                }
+                F_(i,j) = Gradu_(i,j) + static_cast<double>(i==j);
+            }
+        }
+
+        // Compute stress measure S and its derivatives dSdu
+        S_ = 0.;
+        dSdu_ = 0.;
+        for (int k=0; k<dim; k++)
+        {
+            for (int m=0; m<dim; m++)
+            {
+                S_(k,m) += mu_*(Gradu_(k,m)+Gradu_(m,k));
+
+                for (int p=0; p<dim; p++)
+                {
+                    S_(k,m) += lambda_*Gradu_(p,p)*(k==m);
+                    S_(k,m) += mu_*Gradu_(p,k)*Gradu_(p,m);
+
+                    for (int r=0; r<dim; r++)
+                    {
+                        S_(k,m) += lambda_*(Gradu_(r,p)*Gradu_(r,p)/2.)*(k==m);
+                    }
+                }
+
+                I = k*dim+m;
+                for (int v=0; v<dim; v++)
+                {
+                    for (int H=0; H<dof; H++)
+                    {
+                        J = v*dof+H;
+                        dSdu_(I,J) += lambda_*dNdx_(H,v)*(k==m);
+                        dSdu_(I,J) += mu_*(dNdx_(H,m)*(k==v) + dNdx_(H,k)*(m==v));
+                        dSdu_(I,J) += mu_*(dNdx_(H,k)*Gradu_(v,m) + dNdx_(H,m)*Gradu_(v,k));
+
+                        for (int p=0; p<dim; p++)
+                        {
+                            dSdu_(I,J) += lambda_*dNdx_(H,p)*Gradu_(v,p)*(k==m);
+                        }
+                    }
+                }
+            }
+        }
+        
+        tmp1_ = 0.;
+        for (int i=0; i<dim; i++)
+        {
+            for (int j=0; j<dim; j++)
+            {
+                for (int vH=0; vH<(dim*dof); vH++)
+                {
+                    for (int m=0; m<dim; m++)
+                    {
+                        tmp1_((j*dim+i),vH) += dSdu_((j*dim+m),vH)*F_(i,m);
+                    }
+                }
+            }
+        }
+
+        for (int i=0; i<dim; i++)
+        {
+            for (int B=0; B<dof; B++)
+            {
+                I = i*dof+B;
+                for (int v=0; v<dim; v++)
+                {
+                    for (int H=0; H<dof; H++)
+                    {
+                        J = v*dof+H;
+                        for (int j=0; j<dim; j++)
+                        {
+                            // Note that both tmp1 and S are transposed
+                            elmat(I,J) += dNdx_(B,j)*tmp1_((j*dim+i),(v*dof+H));
+                            for (int m=0; m<dim; m++)
+                            {
+                                elmat(I,J) += dNdx_(B,j)*S_(j,m)*dNdx_(H,m)*(i==v);
                             }
                         }
                     }
