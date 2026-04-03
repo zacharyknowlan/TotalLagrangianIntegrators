@@ -127,7 +127,7 @@ void FEI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTran
             }
         }
 
-        // Transform S
+        // Push forward S
         mfem::MultABt(S_, F_, tmp1_);
 
         // Compute the residual vector
@@ -221,7 +221,7 @@ void FEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
                         J = v*dof+H;
                         for (int n=0; n<dim; n++)
                         {
-                            for (int p=0; p<=n; p++) // Prevents double-counting
+                            for (int p=0; p<=n; p++) // Prevents double-counting for Voigt
                             {
                                 L = MapVoigt2D(n,p);
                                 
@@ -240,6 +240,7 @@ void FEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
             }
         }
         
+        // Push forward dSdu_ 
         tmp1_ = 0.;
         for (int i=0; i<dim; i++)
         {
@@ -353,7 +354,7 @@ void HEI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTran
             }
         }
 
-        // Transform S
+        // Push forward S
         mfem::MultABt(S_, F_, tmp1_);
 
         // Compute the residual vector
@@ -387,7 +388,7 @@ void HEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
     tmp1_.SetSize(dim*dim, dof*dim);
     elmat.SetSize(dof*dim, dof*dim);
 
-    const mfem::IntegrationRule *ir= &mfem::IntRules.Get(el.GetGeomType(), 3*el.GetOrder());
+    const mfem::IntegrationRule *ir= &mfem::IntRules.Get(el.GetGeomType(), 2*el.GetOrder());
 
     elmat = 0.; // Set element gradient matrix to zero
     for (int ip=0; ip<ir->GetNPoints(); ip++)
@@ -453,6 +454,7 @@ void HEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
             }
         }
         
+        // Push forward dSdu_
         tmp1_ = 0.;
         for (int i=0; i<dim; i++)
         {
@@ -486,6 +488,116 @@ void HEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
                             {
                                 elmat(I,J) += dNdx_(B,j)*S_(j,m)*dNdx_(H,m)*(i==v);
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+using PK2TI = PK2TractionIntegrator;
+
+void PK2TI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                    const mfem::Vector& elfun, mfem::Vector& elvect)
+{
+    int I; // Aux index
+    int dof = el.GetDof();
+    int dim = Tr.GetSpaceDim();
+
+    dNdeta_.SetSize(dof, dim);
+    dNdx_.SetSize(dof, dim);
+    N_.SetSize(dof);
+    T_vec_.SetSize(dim);
+    F_.SetSize(dim);
+    elvect.SetSize(dof*dim);
+    
+    const mfem::IntegrationRule* ir = &mfem::IntRules.Get(el.GetGeomType(), 2*el.GetOrder());
+
+    elvect = 0.;
+    if (T_ == nullptr) {return;} // return with null vector if T_ is not set
+
+    for (int ip=0; ip<ir->GetNPoints(); ip++)
+    {
+        const mfem::IntegrationPoint &int_point = ir->IntPoint(ip);
+        Tr.SetIntPoint(&int_point);
+        el.CalcShape(int_point, N_);
+        el.CalcDShape(int_point, dNdeta_);
+        mfem::Mult(dNdeta_, Tr.InverseJacobian(), dNdx_);
+        
+        // Compute nominal Cauchy traction vector
+        T_->Eval(T_vec_, Tr, int_point);
+        T_vec_ *= Tr.Weight() * int_point.weight;
+
+        // Compute deformation gradient
+        F_ = 0.;
+        for (int i=0; i<dim; i++)
+        {
+            for (int j=0; j<dim; j++)
+            {
+                for (int C=0; C<dof; C++)
+                {
+                    F_(i,j) += dNdx_(C,j)*elfun[i*dof+C];
+                }
+                F_(i,j) += static_cast<double>(i==j);
+            }
+        }
+ 
+        for (int i=0; i<dim; i++)
+        {
+            for (int B=0; B<dof; B++)
+            {
+                I = i*dof+B;
+                for (int m=0; m<dim; m++) // Push forward Cauchy traction vector
+                {
+                    elvect[I] -= N_[B]*F_(i,m)*T_vec_[m];
+                }
+            }
+        }
+    }
+}
+
+void PK2TI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+                                const mfem::Vector& elfun, mfem::DenseMatrix& elmat)
+{
+    int I, J; // Aux indices
+    int dof = el.GetDof();
+    int dim = Tr.GetSpaceDim();
+
+    dNdeta_.SetSize(dof, dim);
+    dNdx_.SetSize(dof, dim);
+    N_.SetSize(dof);
+    T_vec_.SetSize(dim);
+    elmat.SetSize(dof*dim);
+    
+    const mfem::IntegrationRule* ir = &mfem::IntRules.Get(el.GetGeomType(), 2*el.GetOrder());
+
+    elmat = 0.;
+    for (int ip=0; ip<ir->GetNPoints(); ip++)
+    {
+        const mfem::IntegrationPoint &int_point = ir->IntPoint(ip);
+        Tr.SetIntPoint(&int_point);
+        el.CalcShape(int_point, N_);
+        el.CalcDShape(int_point, dNdeta_);
+        mfem::Mult(dNdeta_, Tr.InverseJacobian(), dNdx_);
+        
+        // Compute traction vector
+        T_->Eval(T_vec_, Tr, int_point);
+        T_vec_ *= Tr.Weight() * int_point.weight;
+
+        for (int i=0; i<dim; i++)
+        {
+            for (int B=0; B<dof; B++)
+            {
+                I = i*dof+B;
+                for (int v=0; v<dim; v++)
+                {
+                    for (int H=0; H<dof; H++)
+                    {
+                        J = v*dof+H;
+                        for (int m=0; m<dim; m++)
+                        {
+                            elmat(I,J) -= N_[B]*dNdx_(H,m)*(i==v)*T_vec_[m];
                         }
                     }
                 }
