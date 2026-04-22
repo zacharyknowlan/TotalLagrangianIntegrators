@@ -3,8 +3,8 @@ import gmsh
 r = 2. # Inner radius (mm)
 t = 0.5 # Thickness (mm)
 
-nr = 10 # Elements through artery thickness
-nt = 20 # Elements along arc
+nr = 8 # Elements through artery thickness
+nt = 32 # Elements along arc
 
 def main():
 

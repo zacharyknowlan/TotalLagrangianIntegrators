@@ -316,8 +316,8 @@ void HEI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTran
         el.CalcDShape(int_point, dNdeta_);
         mfem::Mult(dNdeta_, Tr.InverseJacobian(), dNdx_);
 
-        mu_ = mat_props_[0]->Eval(Tr,int_point) * int_point.weight * Tr.Weight();
-        lambda_ = mat_props_[1]->Eval(Tr,int_point) * int_point.weight * Tr.Weight();
+        mu_ = mat_props_[0]->Eval(Tr,int_point);
+        lambda_ = mat_props_[1]->Eval(Tr,int_point);
 
         // Compute displacement and deformation gradient 
         Gradu_ = 0.;
@@ -365,7 +365,7 @@ void HEI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTran
                 I = i*dof+B;
                 for (int j=0; j<dim; j++)
                 {
-                    elvect[I] += dNdx_(B,j)*tmp1_(j,i); // Transposed
+                    elvect[I] += dNdx_(B,j) * tmp1_(j,i)  * int_point.weight * Tr.Weight();; // Transposed
                 }
             }
         }
@@ -496,12 +496,11 @@ void HEI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransf
     }
 }
 
-using PK2TI = PK2TractionIntegrator;
+using PK1TI = PK1TractionIntegrator;
 
-void PK2TI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+void PK1TI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
                                     const mfem::Vector& elfun, mfem::Vector& elvect)
 {
-    int I; // Aux index
     int dof = el.GetDof();
     int dim = Tr.GetSpaceDim();
 
@@ -515,8 +514,6 @@ void PK2TI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTr
     const mfem::IntegrationRule* ir = &mfem::IntRules.Get(el.GetGeomType(), 2*el.GetOrder());
 
     elvect = 0.;
-    if (T_ == nullptr) {return;} // return with null vector if T_ is not set
-
     for (int ip=0; ip<ir->GetNPoints(); ip++)
     {
         const mfem::IntegrationPoint &int_point = ir->IntPoint(ip);
@@ -528,80 +525,24 @@ void PK2TI::AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTr
         // Compute nominal Cauchy traction vector
         T_->Eval(T_vec_, Tr, int_point);
         T_vec_ *= Tr.Weight() * int_point.weight;
-
-        // Compute deformation gradient
-        F_ = 0.;
-        for (int i=0; i<dim; i++)
-        {
-            for (int j=0; j<dim; j++)
-            {
-                for (int C=0; C<dof; C++)
-                {
-                    F_(i,j) += dNdx_(C,j)*elfun[i*dof+C];
-                }
-                F_(i,j) += static_cast<double>(i==j);
-            }
-        }
  
         for (int i=0; i<dim; i++)
         {
             for (int B=0; B<dof; B++)
             {
-                I = i*dof+B;
-                for (int m=0; m<dim; m++) // Push forward Cauchy traction vector
-                {
-                    elvect[I] -= N_[B]*F_(i,m)*T_vec_[m];
-                }
+                elvect[i*dof+B] -= N_[B]*T_vec_[i];
             }
         }
     }
 }
 
-void PK2TI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
+void PK1TI::AssembleElementGrad(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
                                 const mfem::Vector& elfun, mfem::DenseMatrix& elmat)
 {
-    int I, J; // Aux indices
+    // No linearization is required for PK1 tractions expressed in the current configuration
     int dof = el.GetDof();
     int dim = Tr.GetSpaceDim();
 
-    dNdeta_.SetSize(dof, dim);
-    dNdx_.SetSize(dof, dim);
-    N_.SetSize(dof);
-    T_vec_.SetSize(dim);
     elmat.SetSize(dof*dim);
-    
-    const mfem::IntegrationRule* ir = &mfem::IntRules.Get(el.GetGeomType(), 2*el.GetOrder());
-
     elmat = 0.;
-    for (int ip=0; ip<ir->GetNPoints(); ip++)
-    {
-        const mfem::IntegrationPoint &int_point = ir->IntPoint(ip);
-        Tr.SetIntPoint(&int_point);
-        el.CalcShape(int_point, N_);
-        el.CalcDShape(int_point, dNdeta_);
-        mfem::Mult(dNdeta_, Tr.InverseJacobian(), dNdx_);
-        
-        // Compute traction vector
-        T_->Eval(T_vec_, Tr, int_point);
-        T_vec_ *= Tr.Weight() * int_point.weight;
-
-        for (int i=0; i<dim; i++)
-        {
-            for (int B=0; B<dof; B++)
-            {
-                I = i*dof+B;
-                for (int v=0; v<dim; v++)
-                {
-                    for (int H=0; H<dof; H++)
-                    {
-                        J = v*dof+H;
-                        for (int m=0; m<dim; m++)
-                        {
-                            elmat(I,J) -= N_[B]*dNdx_(H,m)*(i==v)*T_vec_[m];
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

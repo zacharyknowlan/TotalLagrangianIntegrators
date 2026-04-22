@@ -1,1 +1,6 @@
 build/
+meshes/*
+!meshes/.gitkeep
+results/*
+!results/.gitkeep
+*__pycache__*

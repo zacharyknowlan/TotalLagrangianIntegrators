@@ -75,7 +75,7 @@ class HyperElasticIntegrator : public mfem::NonlinearFormIntegrator
 
 };
 
-class PK2TractionIntegrator : public mfem::NonlinearFormIntegrator
+class PK1TractionIntegrator : public mfem::NonlinearFormIntegrator
 {
     private:
 
@@ -83,12 +83,12 @@ class PK2TractionIntegrator : public mfem::NonlinearFormIntegrator
         mfem::DenseMatrix F_, dNdeta_, dNdx_;
         mfem::Vector N_, T_vec_, tmp1_;
 
-        // PK2 traction coefficient (not owned)
+        // PK1 traction coefficient (not owned)
         mfem::VectorCoefficient* T_;
 
     public:
         
-        PK2TractionIntegrator(mfem::VectorCoefficient& T) : T_(&T) {}
+        PK1TractionIntegrator(mfem::VectorCoefficient& T) : T_(&T) {}
 
         void AssembleElementVector(const mfem::FiniteElement& el, mfem::ElementTransformation& Tr,
                                     const mfem::Vector& elfun, mfem::Vector& elvect) override;
