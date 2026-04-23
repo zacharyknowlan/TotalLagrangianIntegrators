@@ -3,14 +3,16 @@ from RunHyperElasticLigament import Lambda, mu, displacements
 
 def main():
 
+    c = 20.
+
     CommandLineInput = ["../build/example_problems/FungLigament"]
     CommandLineInput.extend(["--MeshFile", "../meshes/HalfLigament.msh"])
     CommandLineInput.extend(["--ResultFile", " "])
-    CommandLineInput.extend(["--a", "1."])
-    CommandLineInput.extend(["--A1", str(2.*mu+Lambda)])
-    CommandLineInput.extend(["--A2", str(2.*mu+Lambda)])
-    CommandLineInput.extend(["--A3", str(Lambda)])
-    CommandLineInput.extend(["--A4", str(2.*mu)])
+    CommandLineInput.extend(["--a", str(1./c)])
+    CommandLineInput.extend(["--A1", str(c*(2.*mu+Lambda))])
+    CommandLineInput.extend(["--A2", str(c*(2.*mu+Lambda))])
+    CommandLineInput.extend(["--A3", str(c*Lambda)])
+    CommandLineInput.extend(["--A4", str(c*2.*mu)])
     CommandLineInput.extend(["--A5", "0."])
     CommandLineInput.extend(["--A6", "0."])
     CommandLineInput.extend(["--u", " "])

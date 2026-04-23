@@ -1,7 +1,7 @@
 import subprocess
 
-Lambda = 2.
-mu = 1.
+Lambda = 0.4
+mu = 0.2
 
 pressures = [(0.016 + 0.001*i) for i in range(0,9)] # in MPa
 

@@ -65,12 +65,12 @@ int main(int argc, char** argv)
     ns.SetPreconditioner(prec);
     ns.SetRelTol(1e-14);
     ns.SetAbsTol(1e-8);
-    ns.SetMaxIter(30);
+    ns.SetMaxIter(40);
     ns.SetPrintLevel(0);
 
     // Right edge x dofs for incrementation
     u_space.GetEssentialTrueDofs(right_edge, tmp_tdofs, 0);
-    int N_increments = 20;
+    int N_increments = 50;
     for (int i=0; i<N_increments; i++)
     {
         u.SetSubVector(tmp_tdofs, (static_cast<double>(i+1)/N_increments)*u_edge);

@@ -73,10 +73,10 @@ int main(int argc, char** argv)
     ns.SetPreconditioner(prec);
     ns.SetRelTol(1e-14);
     ns.SetAbsTol(1e-8);
-    ns.SetMaxIter(30);
+    ns.SetMaxIter(40);
     ns.SetPrintLevel(0);
 
-    int N_increments = 20;
+    int N_increments = 50;
     for (int i=0; i<N_increments; i++)
     {
         // Pseudo time is fraction of applied load

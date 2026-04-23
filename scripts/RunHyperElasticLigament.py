@@ -1,8 +1,8 @@
 import subprocess
 from LigamentMesh import l
 
-Lambda = 2.
-mu = 1.
+Lambda = 0.4
+mu = 0.2
 
 strains = [0.05*i for i in range(1,9)]
 displacements = [l*strain for strain in strains]
