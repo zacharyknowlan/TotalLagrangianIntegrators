@@ -1,5 +1,6 @@
 #include "mfem.hpp"
 #include "TLIntegrators.hpp"
+#include "TLStressStrain.hpp"
 #include <cmath>
 
 double p_mag; // Internal pressure of the artery
@@ -40,10 +41,10 @@ int main(int argc, char** argv)
     auto u_ec = mfem::H1_FECollection(2, dim, mfem::BasisType::GaussLobatto); 
     auto u_space = mfem::FiniteElementSpace(&mesh, &u_ec, dim);
 
-    mfem::GridFunction x(&u_space);
-    x = 0.;
-    mfem::GridFunction b(&u_space);
-    b = 0.;
+    mfem::GridFunction u(&u_space);
+    u = 0.;
+    mfem::GridFunction f(&u_space);
+    f = 0.;
 
     auto lambda_coeff = mfem::ConstantCoefficient(lambda);
     auto mu_coeff = mfem::ConstantCoefficient(mu);
@@ -61,7 +62,6 @@ int main(int argc, char** argv)
 
     auto T = mfem::VectorFunctionCoefficient(2, p_int);
     
-
     auto B = mfem::NonlinearForm(&u_space);
     B.AddDomainIntegrator(new HyperElasticIntegrator(mu_coeff, lambda_coeff));
     B.AddBoundaryIntegrator(new PK1TractionIntegrator(T), inner_arc);
@@ -81,16 +81,29 @@ int main(int argc, char** argv)
     {
         // Pseudo time is fraction of applied load
         T.SetTime(static_cast<double>(i+1)/N_increments); 
-        ns.Mult(b, x);
+        ns.Mult(f, u);
     }
     
-    //auto dg_ec = mfem::DG_FECollection(0, dim, mfem::BasisType::GaussLegendre);
-    //auto dg_space = mfem::FiniteElementSpace(&mesh, &dg_ec, dim*dim);
+    auto dg_ec = mfem::DG_FECollection(0, dim, mfem::BasisType::GaussLegendre);
+    auto dg_tensor_space = mfem::FiniteElementSpace(&mesh, &dg_ec, dim*dim);
+    auto dg_scalar_space = mfem::FiniteElementSpace(&mesh, &dg_ec, 1);
+
+    auto E = mfem::GridFunction(&dg_tensor_space);
+    CalcGreenLagrangeStrain(u, E);
+
+    auto sigma = mfem::GridFunction(&dg_tensor_space);
+    CalcHyperElasticCauchyStress(u, E, mu_coeff, lambda_coeff, sigma);
+
+    auto sigma_VM = mfem::GridFunction(&dg_scalar_space);
+    CalcVonMisesStress(sigma, sigma_VM);
 
     std::ofstream file(ResultFile);
     file.precision(16);
     mesh.PrintVTK(file, 0);
-    x.SaveVTK(file, "u", 0);
+    u.SaveVTK(file, "u", 0);
+    E.SaveVTK(file, "E", 0);
+    sigma.SaveVTK(file, "sigma", 0);
+    sigma_VM.SaveVTK(file, "sigma_VM", 0);
     file.close();
 
     return 0;

@@ -3,7 +3,7 @@ import subprocess
 Lambda = 2.
 mu = 1.
 
-pressures = [(0.012 + 0.0005*i) for i in range(0,9)] # in MPa
+pressures = [(0.016 + 0.001*i) for i in range(0,9)] # in MPa
 
 def main():
 
