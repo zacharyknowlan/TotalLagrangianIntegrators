@@ -24,13 +24,13 @@ int FEI::MapVoigt2D(const int i, const int j)
 
 void FEI::ComputeE()
 {   
-    tmp1_.SetSize(Gradu_.Height());
-    mfem::MultAtB(Gradu_, Gradu_, tmp1_);
+    tmp2_.SetSize(Gradu_.Height());
+    mfem::MultAtB(Gradu_, Gradu_, tmp2_);
     for (int i=0; i<Gradu_.Height(); i++)
     {
         for (int j=0; j<Gradu_.Width(); j++)
         {
-            E_(i,j) = (Gradu_(i,j) + Gradu_(j,i) + tmp1_(i,j))/2.;
+            E_(i,j) = (Gradu_(i,j) + Gradu_(j,i) + tmp2_(i,j))/2.;
         }
     }
 }

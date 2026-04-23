@@ -9,7 +9,7 @@ class FungExponentialIntegrator : public mfem::NonlinearFormIntegrator
 
         // Matrices used for element residual/gradient computation
         mfem::DenseMatrix Gradu_, F_, S_, E_, A_, dSdu_;
-        mfem::DenseMatrix dNdeta_, dNdx_, dLambdadE_, tmp1_;
+        mfem::DenseMatrix dNdeta_, dNdx_, dLambdadE_, tmp1_, tmp2_;
 
         // Material properties and stiffening exponent
         double a_, A1_, A2_, A3_, A4_, A5_, A6_, Lambda_;

@@ -60,7 +60,7 @@ int main(int argc, char** argv)
     ess_tdofs.Append(tmp_tdofs);
 
     auto T = mfem::VectorFunctionCoefficient(2, p_int);
-    T.SetTime(1.);
+    
 
     auto B = mfem::NonlinearForm(&u_space);
     B.AddDomainIntegrator(new HyperElasticIntegrator(mu_coeff, lambda_coeff));
@@ -73,9 +73,16 @@ int main(int argc, char** argv)
     ns.SetPreconditioner(prec);
     ns.SetRelTol(1e-14);
     ns.SetAbsTol(1e-8);
-    ns.SetMaxIter(100);
-    ns.SetPrintLevel(1);
-    ns.Mult(b, x);
+    ns.SetMaxIter(30);
+    ns.SetPrintLevel(0);
+
+    int N_increments = 20;
+    for (int i=0; i<N_increments; i++)
+    {
+        // Pseudo time is fraction of applied load
+        T.SetTime(static_cast<double>(i+1)/N_increments); 
+        ns.Mult(b, x);
+    }
     
     //auto dg_ec = mfem::DG_FECollection(0, dim, mfem::BasisType::GaussLegendre);
     //auto dg_space = mfem::FiniteElementSpace(&mesh, &dg_ec, dim*dim);

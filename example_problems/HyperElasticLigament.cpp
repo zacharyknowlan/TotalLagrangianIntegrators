@@ -48,11 +48,9 @@ int main(int argc, char** argv)
     u_space.GetEssentialTrueDofs(left_edge, tmp_tdofs);
     ess_tdofs.Append(tmp_tdofs);
 
-    u_space.GetEssentialTrueDofs(bottom_edge, tmp_tdofs, 1);
+    // Centerline only constrained in y direction
+    u_space.GetEssentialTrueDofs(bottom_edge, tmp_tdofs, 1); 
     ess_tdofs.Append(tmp_tdofs);
-
-    u_space.GetEssentialTrueDofs(right_edge, tmp_tdofs, 0);
-    x.SetSubVector(tmp_tdofs, u_edge);
 
     auto B = mfem::NonlinearForm(&u_space);
     B.AddDomainIntegrator(new HyperElasticIntegrator(mu_coeff, lambda_coeff));
@@ -64,9 +62,17 @@ int main(int argc, char** argv)
     ns.SetPreconditioner(prec);
     ns.SetRelTol(1e-14);
     ns.SetAbsTol(1e-8);
-    ns.SetMaxIter(100);
-    ns.SetPrintLevel(1);
-    ns.Mult(b, x);
+    ns.SetMaxIter(30);
+    ns.SetPrintLevel(0);
+
+    // Right edge x dofs for incrementation
+    u_space.GetEssentialTrueDofs(right_edge, tmp_tdofs, 0);
+    int N_increments = 20;
+    for (int i=0; i<N_increments; i++)
+    {
+        x.SetSubVector(tmp_tdofs, (static_cast<double>(i+1)/N_increments)*u_edge);
+        ns.Mult(b, x);
+    }
 
     //auto dg_ec = mfem::DG_FECollection(0, dim, mfem::BasisType::GaussLegendre);
     //auto dg_space = mfem::FiniteElementSpace(&mesh, &dg_ec, dim*dim);
