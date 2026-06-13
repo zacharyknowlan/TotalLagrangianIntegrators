@@ -5,10 +5,8 @@ void CalcGreenLagrangeStrain(const mfem::GridFunction& u, mfem::GridFunction& E)
     int NE = u.FESpace()->GetNE();
     int dim = u.FESpace()->GetMesh()->SpaceDimension();
 
-    mfem::DenseMatrix dNdeta, dNdx, Gradu;
+    mfem::DenseMatrix dNdeta, dNdx, Gradu(dim);
     mfem::Array<int> vdofs;
-
-    Gradu.SetSize(dim);
 
     E = 0.;
     for(int el=0; el<NE; el++)
@@ -67,13 +65,8 @@ void CalcHyperElasticCauchyStress(const mfem::GridFunction& u, const mfem::GridF
     int dim = u.FESpace()->GetMesh()->SpaceDimension();
     
     double lambda_val, mu_val, E_trace, J;
-    mfem::DenseMatrix F, S, dNdeta, dNdx, tmp1, tmp2;
+    mfem::DenseMatrix F(dim), S(dim), dNdeta, dNdx, tmp1(dim), tmp2(dim);
     mfem::Array<int> vdofs;
-
-    F.SetSize(dim);
-    S.SetSize(dim);
-    tmp1.SetSize(dim);
-    tmp2.SetSize(dim);
     
     sigma = 0.;
     for(int el=0; el<NE; el++)
@@ -152,14 +145,8 @@ void CalcFungCauchyStress(const mfem::GridFunction& u, const mfem::GridFunction&
     int dim = u.FESpace()->GetMesh()->SpaceDimension();
     
     double a_val, A1_val, A2_val, A3_val, A4_val, A5_val, A6_val, Lambda, E_trace, J;
-    mfem::DenseMatrix F, E_, S, dNdeta, dNdx, tmp1, tmp2;
+    mfem::DenseMatrix F(dim), E_(dim), S(dim), dNdeta, dNdx, tmp1(dim), tmp2(dim);
     mfem::Array<int> vdofs;
-
-    F.SetSize(dim);
-    E_.SetSize(dim);
-    S.SetSize(dim);
-    tmp1.SetSize(dim);
-    tmp2.SetSize(dim);
     
     sigma = 0.;
     for(int el=0; el<NE; el++)
@@ -368,4 +355,57 @@ void CalcVonMisesStress(mfem::GridFunction& sigma, mfem::GridFunction& VMStress)
         }
         VMStress[el] = std::sqrt(3./2.*InnerProd);
     }
+}
+
+double GetFungHelmholtzEnergy(const mfem::GridFunction& E, mfem::Coefficient& a, 
+                                mfem::Coefficient& A1, mfem::Coefficient& A2, 
+                                mfem::Coefficient& A3, mfem::Coefficient& A4, 
+                                mfem::Coefficient& A5, mfem::Coefficient& A6)
+{
+    int NE = E.FESpace()->GetNE();
+    int dim = E.FESpace()->GetMesh()->SpaceDimension();
+
+    double a_val, A1_val, A2_val, A3_val, A4_val, A5_val, A6_val, Lambda;
+    double free_energy = 0.;
+    mfem::DenseMatrix E_(dim);
+
+    for (int el=0; el<NE; el++)
+    {
+        const mfem::FiniteElement *FE = E.FESpace()->GetFE(el);
+        const mfem::IntegrationRule *int_rule = &mfem::IntRules.Get(FE->GetGeomType(), 2*FE->GetOrder());
+        mfem::ElementTransformation *Tr = E.FESpace()->GetElementTransformation(el);
+
+        for (int i=0; i<dim; i++)
+        {
+            for (int j=0; j<dim; j++)
+            {
+                E_(i,j) = E[NE*(dim*i+j) + el];
+            }
+        }
+
+        for(int ip=0; ip<int_rule->GetNPoints(); ip++)
+        {
+            const mfem::IntegrationPoint &int_point = int_rule->IntPoint(ip);
+            Tr->SetIntPoint(&int_point);
+        
+            a_val = a.Eval(*Tr, int_point);
+            A1_val = A1.Eval(*Tr, int_point);
+            A2_val = A2.Eval(*Tr, int_point);
+            A3_val = A3.Eval(*Tr, int_point);
+            A4_val = A4.Eval(*Tr, int_point);
+            A5_val = A5.Eval(*Tr, int_point);
+            A6_val = A6.Eval(*Tr, int_point);
+
+            Lambda = A1_val*std::pow(E_(0,0), 2);
+            Lambda += A2_val*std::pow(E_(1,1), 2);
+            Lambda += 2.*A3_val*E_(0,0)*E_(1,1);
+            Lambda += A4_val*std::pow(E_(0,1), 2);
+            Lambda += 2.*A5_val*E_(0,1)*E_(0,0);
+            Lambda += 2.*A6_val*E_(0,1)*E_(1,1);
+
+            free_energy += (a_val/2.) * (std::exp(Lambda) - 1.) * int_point.weight * Tr->Weight();
+        }
+    }
+
+    return free_energy;
 }

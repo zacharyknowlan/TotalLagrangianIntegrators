@@ -1,7 +1,6 @@
 import subprocess
+from FungUniaxialExtension import a, A1, A2, A3, A4, A5, A6
 
-A0 = 10.
-a = 200e3
 strain = 0.01
 
 def main():
@@ -10,12 +9,12 @@ def main():
     CommandLineInput.extend(["--MeshFile", "../meshes/UnitSquareWithInclusion.msh"])
     CommandLineInput.extend(["--ResultFile", "../results/SquareWithInclusion.vtk"])
     CommandLineInput.extend(["-a", str(a)])
-    CommandLineInput.extend(["-A1", str(A0)])
-    CommandLineInput.extend(["-A2", str(A0)])
-    CommandLineInput.extend(["-A3", str(A0/2.)])
-    CommandLineInput.extend(["-A4", str(A0/2.)])
-    CommandLineInput.extend(["-A5", "0."])
-    CommandLineInput.extend(["-A6", "0."])
+    CommandLineInput.extend(["-A1", str(A1)])
+    CommandLineInput.extend(["-A2", str(A2)])
+    CommandLineInput.extend(["-A3", str(A3)])
+    CommandLineInput.extend(["-A4", str(A4)])
+    CommandLineInput.extend(["-A5", str(A5)])
+    CommandLineInput.extend(["-A6", str(A6)])
     CommandLineInput.extend(["-u_x", str(strain)])
 
     _ = subprocess.run(CommandLineInput)

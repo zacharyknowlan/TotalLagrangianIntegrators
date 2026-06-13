@@ -1,5 +1,7 @@
 #include "mfem.hpp"
 #include "affine.hpp"
+#include <chrono>
+#include <filesystem>
 
 int main(int argc, char** argv)
 {
@@ -30,6 +32,8 @@ int main(int argc, char** argv)
        return 1;
     }
 
+    auto start = std::chrono::system_clock::now();
+
     mfem::Mesh mesh = mfem::Mesh(MeshFile.c_str(), 1, 1);
     int dim = mesh.Dimension();
 
@@ -53,15 +57,15 @@ int main(int argc, char** argv)
 
     mfem::Array<int> LeftEdge({0, 0, 0, 1, 0, 0});
     mfem::Array<int> RightEdge({0, 1, 0, 0, 0, 0});
-    mfem::Array<int> CenterLine({0, 0, 0, 0, 1, 0});
+    //mfem::Array<int> CenterLine({0, 0, 0, 0, 1, 0});
     
-    u_space.GetEssentialTrueDofs(LeftEdge, tmp_tdofs, 0);
+    u_space.GetEssentialTrueDofs(LeftEdge, tmp_tdofs);
     ess_tdofs.Append(tmp_tdofs);
 
-    u_space.GetEssentialTrueDofs(CenterLine, tmp_tdofs, 1);
-    ess_tdofs.Append(tmp_tdofs);
+    //u_space.GetEssentialTrueDofs(CenterLine, tmp_tdofs, 1);
+    //ess_tdofs.Append(tmp_tdofs);
 
-    u_space.GetEssentialTrueDofs(RightEdge, tmp_tdofs, 0); // tmp_tdofs used in incrementation later
+    u_space.GetEssentialTrueDofs(RightEdge, tmp_tdofs);
     ess_tdofs.Append(tmp_tdofs);
 
     auto B = mfem::NonlinearForm(&u_space);
@@ -76,20 +80,24 @@ int main(int argc, char** argv)
     ns.SetRelTol(1e-12);
     ns.SetAbsTol(1e-8);
     ns.SetMaxIter(40);
-    ns.SetPrintLevel(1);
+    ns.SetPrintLevel(0);
+
+    u_space.GetEssentialTrueDofs(RightEdge, tmp_tdofs, 0); // Used in incrementation
 
     // Number of increments depends on strain applied
-    int N_increments = static_cast<int>(std::abs(u_x/0.001)); 
+    int N_increments = static_cast<int>(std::abs(u_x/0.0005)); 
     for (int i=0; i<N_increments; i++)
     {
-        mfem::out << "Solving increment " << (i+1) << " out of " << N_increments << " \n";
+        //mfem::out << "Solving increment " << (i+1) << " out of " << N_increments << " \n";
         u.SetSubVector(tmp_tdofs, (static_cast<double>(i+1)/N_increments)*u_x);
         ns.Mult(f, u);
     }
 
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+
     auto dg_ec = mfem::DG_FECollection(0, dim, mfem::BasisType::GaussLegendre);
     auto dg_tensor_space = mfem::FiniteElementSpace(&mesh, &dg_ec, dim*dim);
-    auto dg_scalar_space = mfem::FiniteElementSpace(&mesh, &dg_ec, 1);
 
     auto E = mfem::GridFunction(&dg_tensor_space);
     CalcGreenLagrangeStrain(u, E);
@@ -101,6 +109,9 @@ int main(int argc, char** argv)
     auto P = mfem::GridFunction(&dg_tensor_space);
     CalcFungPK1Stress(u, E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                         A4_coeff, A5_coeff, A6_coeff, P);
+    
+    double free_energy = GetFungHelmholtzEnergy(E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+                                                A4_coeff, A5_coeff, A6_coeff);
 
     std::ofstream file(ResultFile);
     file.precision(16);
@@ -110,6 +121,54 @@ int main(int argc, char** argv)
     sigma.SaveVTK(file, "sigma", 0);
     P.SaveVTK(file, "P", 0);
     file.close();
+
+    if (MeshFile == "../meshes/Square.msh")
+    {
+        std::string DOF_file_name = "../results/DOF.csv";
+        if (std::filesystem::exists(DOF_file_name)) 
+        {
+            std::ofstream DOF_file(DOF_file_name, std::ios::app);
+            DOF_file << u_x << ", " << u.Size() << "\n";
+            DOF_file.close();
+        } 
+        else 
+        {
+            std::ofstream DOF_file(DOF_file_name);
+            DOF_file << "# DOF counts\n";
+            DOF_file << u_x << ", " << u.Size() << "\n";
+            DOF_file.close();
+        }
+
+        std::string solve_time_file_name = "../results/solve_time.csv";
+        if (std::filesystem::exists(solve_time_file_name)) 
+        {
+            std::ofstream solve_time_file(solve_time_file_name, std::ios::app);
+            solve_time_file << u_x << ", " << elapsed.count() << "\n";
+            solve_time_file.close();
+        } 
+        else 
+        {
+            std::ofstream solve_time_file(solve_time_file_name);
+            solve_time_file << "# Solve times for each strain\n";
+            solve_time_file << u_x << ", " << elapsed.count() << "\n";
+            solve_time_file.close();
+        }
+        
+        std::string free_energy_file_name = "../results/free_energy.csv";
+        if (std::filesystem::exists(free_energy_file_name))
+        {
+            std::ofstream free_energy_file(free_energy_file_name, std::ios::app);
+            free_energy_file << u_x << ", " << free_energy << "\n";
+            free_energy_file.close();
+        } 
+        else 
+        {
+            std::ofstream free_energy_file(free_energy_file_name);
+            free_energy_file << "# Total Helmholtz free energy for each strain\n";
+            free_energy_file << u_x << ", " << free_energy << "\n";
+            free_energy_file.close();
+        }
+    }
 
     return 0;
 }

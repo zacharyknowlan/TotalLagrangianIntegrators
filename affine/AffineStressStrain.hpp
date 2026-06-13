@@ -26,4 +26,10 @@ void CalcFungPK1Stress(const mfem::GridFunction& u, const mfem::GridFunction& E,
 // Compute the element-wise Von-Mises stress
 void CalcVonMisesStress(mfem::GridFunction& sigma, mfem::GridFunction& VMStress);
 
-#endif 
+// Get the total Helmholtz free energy for the domain
+double GetFungHelmholtzEnergy(const mfem::GridFunction& E, mfem::Coefficient& a, 
+                                mfem::Coefficient& A1, mfem::Coefficient& A2, 
+                                mfem::Coefficient& A3, mfem::Coefficient& A4, 
+                                mfem::Coefficient& A5, mfem::Coefficient& A6);
+
+#endif
