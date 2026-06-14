@@ -1,7 +1,9 @@
 build/
 meshes/*
 !meshes/.gitkeep
-results/*
-!results/.gitkeep
+results/UniaxialExtension*
+!results/UniaxialExtension/.gitkeep
+results/BiaxialExtension*
+!results/BiaxialExtension/.gitkeep
 *__pycache__*
 *nohup.out

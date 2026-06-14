@@ -15,3 +15,6 @@ target_link_libraries(FUE PRIVATE mfem affine)
 
 add_executable(FSI FungSingleInclusion.cpp)
 target_link_libraries(FSI PRIVATE mfem affine)
+
+add_executable(FBE FungBiaxialExtension.cpp)
+target_link_libraries(FBE PRIVATE mfem affine)

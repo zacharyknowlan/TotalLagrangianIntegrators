@@ -7,9 +7,9 @@ int main(int argc, char** argv)
 {
     // Material parameters
     double a, A1, A2, A3, A4, A5, A6;
-    
-    // Right edge displacement
-    double u_mag;
+
+    // Top and right displacement
+    double u_x = 0., u_y = 0.;
     
     // I/O parameters
     std::string MeshFile, ResultFile;
@@ -25,7 +25,8 @@ int main(int argc, char** argv)
     args.AddOption(&A4, "-A4", "--A4", "A4");
     args.AddOption(&A5, "-A5", "--A5", "A5");
     args.AddOption(&A6, "-A6", "--A6", "A6");
-    args.AddOption(&u_mag, "-u", "--u", "Right Displacement");
+    args.AddOption(&u_x, "-u_x", "--u_x", "Right Displacement");
+    args.AddOption(&u_y, "-u_y", "--u_y", "Top Displacement");
     args.AddOption(&output_csv, "-o", "--output_csv", "Ouput the CSV Data Files");
     args.Parse();
     if (!args.Good())
@@ -55,15 +56,23 @@ int main(int argc, char** argv)
     auto A5_coeff = mfem::ConstantCoefficient(A5);
     auto A6_coeff = mfem::ConstantCoefficient(A6);
 
-    mfem::Array<int> ess_tdofs, tmp_tdofs;
+    mfem::Array<int> ess_tdofs, tmp_tdofs, right_tdofs, top_tdofs;
 
-    mfem::Array<int> left({0, 0, 0, 1, 0, 0});
+    mfem::Array<int> bottom({1, 0, 0, 0, 0, 0});
     mfem::Array<int> right({0, 1, 0, 0, 0, 0});
-    
-    u_space.GetEssentialTrueDofs(left, tmp_tdofs);
-    ess_tdofs.Append(tmp_tdofs);
+    mfem::Array<int> top({0, 0, 1, 0, 0, 0});
+    mfem::Array<int> left({0, 0, 0, 1, 0, 0});
 
-    u_space.GetEssentialTrueDofs(right, tmp_tdofs);
+    u_space.GetEssentialTrueDofs(bottom, tmp_tdofs, 1);
+    ess_tdofs.Append(tmp_tdofs);
+    
+    u_space.GetEssentialTrueDofs(right, right_tdofs, 0);
+    ess_tdofs.Append(right_tdofs);
+
+    u_space.GetEssentialTrueDofs(top, top_tdofs, 1);
+    ess_tdofs.Append(top_tdofs);
+    
+    u_space.GetEssentialTrueDofs(left, tmp_tdofs, 0);
     ess_tdofs.Append(tmp_tdofs);
 
     auto B = mfem::NonlinearForm(&u_space);
@@ -80,14 +89,14 @@ int main(int argc, char** argv)
     ns.SetMaxIter(40);
     ns.SetPrintLevel(0);
 
-    u_space.GetEssentialTrueDofs(right, tmp_tdofs, 0); // Used in incrementation
-
     // Number of increments depends on strain applied
-    int N_increments = static_cast<int>(std::abs(u_mag/0.0005)); 
+    double max_u = std::max(u_x, u_y);
+    int N_increments = static_cast<int>(std::abs(max_u/0.0005)); 
     for (int i=0; i<N_increments; i++)
     {
         //mfem::out << "Solving increment " << (i+1) << " out of " << N_increments << " \n";
-        u.SetSubVector(tmp_tdofs, (static_cast<double>(i+1)/N_increments)*u_mag);
+        u.SetSubVector(right_tdofs, (static_cast<double>(i+1)/N_increments)*u_x);
+        u.SetSubVector(top_tdofs, (static_cast<double>(i+1)/N_increments)*u_y);
         ns.Mult(f, u);
     }
 
@@ -122,48 +131,48 @@ int main(int argc, char** argv)
 
     if (output_csv)
     {
-        std::string DOF_file_name = "../results/UniaxialExtension/Fung_DOF.csv";
+        std::string DOF_file_name = "../results/BiaxialExtension/Fung_DOF.csv";
         if (std::filesystem::exists(DOF_file_name)) 
         {
             std::ofstream DOF_file(DOF_file_name, std::ios::app);
-            DOF_file << u_mag << ", " << u.Size() << "\n";
+            DOF_file << u_x << ", " << u_y << ", " << u.Size() << "\n";
             DOF_file.close();
         } 
         else 
         {
             std::ofstream DOF_file(DOF_file_name);
             DOF_file << "# DOF counts\n";
-            DOF_file << u_mag << ", " << u.Size() << "\n";
+            DOF_file << u_x << ", " << u_y << ", " << u.Size() << "\n";
             DOF_file.close();
         }
 
-        std::string solve_time_file_name = "../results/UniaxialExtension/Fung_solve_time.csv";
+        std::string solve_time_file_name = "../results/BiaxialExtension/Fung_solve_time.csv";
         if (std::filesystem::exists(solve_time_file_name)) 
         {
             std::ofstream solve_time_file(solve_time_file_name, std::ios::app);
-            solve_time_file << u_mag << ", " << elapsed.count() << "\n";
+            solve_time_file << u_x << ", " << u_y << ", " << elapsed.count() << "\n";
             solve_time_file.close();
         } 
         else 
         {
             std::ofstream solve_time_file(solve_time_file_name);
             solve_time_file << "# Solve times for each strain\n";
-            solve_time_file << u_mag << ", " << elapsed.count() << "\n";
+            solve_time_file << u_x << ", " << u_y << ", " << elapsed.count() << "\n";
             solve_time_file.close();
         }
         
-        std::string free_energy_file_name = "../results/UniaxialExtension/Fung_free_energy.csv";
+        std::string free_energy_file_name = "../results/BiaxialExtension/Fung_free_energy.csv";
         if (std::filesystem::exists(free_energy_file_name))
         {
             std::ofstream free_energy_file(free_energy_file_name, std::ios::app);
-            free_energy_file << u_mag << ", " << free_energy << "\n";
+            free_energy_file << u_x << ", " << u_y << ", " << free_energy << "\n";
             free_energy_file.close();
         } 
         else 
         {
             std::ofstream free_energy_file(free_energy_file_name);
             free_energy_file << "# Total Helmholtz free energy for each strain\n";
-            free_energy_file << u_mag << ", " << free_energy << "\n";
+            free_energy_file << u_x << ", " << u_y << ", " << free_energy << "\n";
             free_energy_file.close();
         }
     }

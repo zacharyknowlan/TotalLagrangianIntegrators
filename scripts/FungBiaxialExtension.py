@@ -1,20 +1,14 @@
 import subprocess
+from FungUniaxialExtension import a, A1, A2, A3, A4, A5, A6, E11
 from pathlib import Path
 
-ResultDirectory = "../results/UniaxialExtension/"
+ResultDirectory = "../results/BiaxialExtension/"
 
-a = 5.12e3 # Pa
-A1 = 60.12
-A2 = 86.34
-A3 = 2.00
-A4 = 203.16
-A5 = 0. #43.05
-A6 = 0. #42.14
-E11 = [0.01*i for i in range(1,21)]
+E22 = [((strain + 0.04)/1.79) for strain in E11]
 
 def main():
 
-    CommandLineInput = ["../build/problems/FUE"]
+    CommandLineInput = ["../build/problems/FBE"]
     CommandLineInput.extend(["--MeshFile", "../meshes/Square.msh"])
     CommandLineInput.extend(["--ResultFile", " "])
     CommandLineInput.extend(["-a", str(a)])
@@ -24,7 +18,8 @@ def main():
     CommandLineInput.extend(["-A4", str(A4)])
     CommandLineInput.extend(["-A5", str(A5)])
     CommandLineInput.extend(["-A6", str(A6)])
-    CommandLineInput.extend(["-u", str(E11[0])])
+    CommandLineInput.extend(["-u_x", " "])
+    CommandLineInput.extend(["-u_y", " "])
     CommandLineInput.extend(["-o", "1"])
 
     DOF_filepath = Path(ResultDirectory + "Fung_DOF.csv")
@@ -38,8 +33,9 @@ def main():
 
     processes = []
     for i in range(0, len(E11)):
-        CommandLineInput[4] = str(ResultDirectory + "Fung_Uniaxial_Result_" + str(i) + ".vtk")
+        CommandLineInput[4] = str(ResultDirectory + "Fung_Biaxial_Result_" + str(i) + ".vtk")
         CommandLineInput[20] = str(E11[i])
+        CommandLineInput[22] = str(E22[i])
         process = subprocess.Popen(CommandLineInput)
         processes.append(process)
 
