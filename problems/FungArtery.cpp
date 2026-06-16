@@ -102,7 +102,7 @@ int main(int argc, char** argv)
     CalcGreenLagrangeStrain(u, E);
 
     auto sigma = mfem::GridFunction(&dg_tensor_space);
-    CalcFungCauchyStress(u, E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+    CalcFungCauchyStress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                             A4_coeff, A5_coeff, A6_coeff, sigma);
 
     auto sigma_VM = mfem::GridFunction(&dg_scalar_space);

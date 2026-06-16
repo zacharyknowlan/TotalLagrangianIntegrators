@@ -91,7 +91,7 @@ int main(int argc, char** argv)
     CalcGreenLagrangeStrain(u, E);
 
     auto sigma = mfem::GridFunction(&dg_tensor_space);
-    CalcHyperElasticCauchyStress(u, E, mu_coeff, lambda_coeff, sigma);
+    CalcHyperElasticCauchyStress(u, mu_coeff, lambda_coeff, sigma);
 
     auto sigma_VM = mfem::GridFunction(&dg_scalar_space);
     CalcVonMisesStress(sigma, sigma_VM);

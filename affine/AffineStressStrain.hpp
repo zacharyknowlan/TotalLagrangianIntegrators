@@ -7,27 +7,29 @@
 void CalcGreenLagrangeStrain(const mfem::GridFunction& u, mfem::GridFunction& E);
 
 // Compute the element-wise Cauchy stress for the hyper elastic model
-void CalcHyperElasticCauchyStress(const mfem::GridFunction& u, const mfem::GridFunction& E, 
-                                        mfem::Coefficient& mu, mfem::Coefficient& lambda, 
-                                        mfem::GridFunction& sigma);
+void CalcHyperElasticCauchyStress(const mfem::GridFunction& u, mfem::Coefficient& mu, 
+                                    mfem::Coefficient& lambda, mfem::GridFunction& sigma);
 
-// Compute the element-wise Cauchy stress for the Fung exponential model
-void CalcFungCauchyStress(const mfem::GridFunction& u, const mfem::GridFunction& E, 
-                            mfem::Coefficient& a, mfem::Coefficient& A1, mfem::Coefficient& A2, 
-                            mfem::Coefficient& A3, mfem::Coefficient& A4, mfem::Coefficient& A5, 
-                            mfem::Coefficient& A6, mfem::GridFunction& sigma);
+// Compute the element-wise PK2 stress for the Fung exponential model
+void CalcFungPK2Stress(const mfem::GridFunction& u, mfem::Coefficient& a, mfem::Coefficient& A1, 
+                        mfem::Coefficient& A2, mfem::Coefficient& A3, mfem::Coefficient& A4, 
+                        mfem::Coefficient& A5, mfem::Coefficient& A6, mfem::GridFunction& S);
 
 // Compute the element-wise PK1 stress for the Fung exponential model
-void CalcFungPK1Stress(const mfem::GridFunction& u, const mfem::GridFunction& E, 
-                            mfem::Coefficient& a, mfem::Coefficient& A1, mfem::Coefficient& A2, 
-                            mfem::Coefficient& A3, mfem::Coefficient& A4, mfem::Coefficient& A5, 
-                            mfem::Coefficient& A6, mfem::GridFunction& P);
+void CalcFungPK1Stress(const mfem::GridFunction& u, mfem::Coefficient& a, mfem::Coefficient& A1, 
+                        mfem::Coefficient& A2, mfem::Coefficient& A3, mfem::Coefficient& A4, 
+                        mfem::Coefficient& A5, mfem::Coefficient& A6, mfem::GridFunction& P);
+
+// Compute the element-wise Cauchy stress for the Fung exponential model
+void CalcFungCauchyStress(const mfem::GridFunction& u, mfem::Coefficient& a, mfem::Coefficient& A1, 
+                            mfem::Coefficient& A2, mfem::Coefficient& A3, mfem::Coefficient& A4, 
+                            mfem::Coefficient& A5, mfem::Coefficient& A6, mfem::GridFunction& sigma);
 
 // Compute the element-wise Von-Mises stress
 void CalcVonMisesStress(mfem::GridFunction& sigma, mfem::GridFunction& VMStress);
 
 // Get the total Helmholtz free energy for the domain
-double GetFungHelmholtzEnergy(const mfem::GridFunction& E, mfem::Coefficient& a, 
+double GetFungHelmholtzEnergy(const mfem::GridFunction& u, mfem::Coefficient& a, 
                                 mfem::Coefficient& A1, mfem::Coefficient& A2, 
                                 mfem::Coefficient& A3, mfem::Coefficient& A4, 
                                 mfem::Coefficient& A5, mfem::Coefficient& A6);

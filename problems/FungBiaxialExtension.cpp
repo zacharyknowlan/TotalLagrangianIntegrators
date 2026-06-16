@@ -13,7 +13,7 @@ int main(int argc, char** argv)
     
     // I/O parameters
     std::string MeshFile, ResultFile;
-    int output_csv;
+    int output_csv, num_increments = 1;
 
     mfem::OptionsParser args(argc, argv);
     args.AddOption(&MeshFile, "-mf", "--MeshFile", "Mesh File");
@@ -27,6 +27,7 @@ int main(int argc, char** argv)
     args.AddOption(&A6, "-A6", "--A6", "A6");
     args.AddOption(&u_x, "-u_x", "--u_x", "Right Displacement");
     args.AddOption(&u_y, "-u_y", "--u_y", "Top Displacement");
+    args.AddOption(&num_increments, "-i", "--increments", "Number of Load Increments");
     args.AddOption(&output_csv, "-o", "--output_csv", "Ouput the CSV Data Files");
     args.Parse();
     if (!args.Good())
@@ -89,14 +90,11 @@ int main(int argc, char** argv)
     ns.SetMaxIter(40);
     ns.SetPrintLevel(0);
 
-    // Number of increments depends on strain applied
-    double max_u = std::max(u_x, u_y);
-    int N_increments = static_cast<int>(std::abs(max_u/0.0005)); 
-    for (int i=0; i<N_increments; i++)
+    for (int i=0; i<num_increments; i++)
     {
         //mfem::out << "Solving increment " << (i+1) << " out of " << N_increments << " \n";
-        u.SetSubVector(right_tdofs, (static_cast<double>(i+1)/N_increments)*u_x);
-        u.SetSubVector(top_tdofs, (static_cast<double>(i+1)/N_increments)*u_y);
+        u.SetSubVector(right_tdofs, (static_cast<double>(i+1)/num_increments)*u_x);
+        u.SetSubVector(top_tdofs, (static_cast<double>(i+1)/num_increments)*u_y);
         ns.Mult(f, u);
     }
 
@@ -109,15 +107,19 @@ int main(int argc, char** argv)
     auto E = mfem::GridFunction(&dg_tensor_space);
     CalcGreenLagrangeStrain(u, E);
 
+    auto S = mfem::GridFunction(&dg_tensor_space);
+    CalcFungPK2Stress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+                        A4_coeff, A5_coeff, A6_coeff, S);
+
+    auto P = mfem::GridFunction(&dg_tensor_space);
+    CalcFungPK1Stress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+                        A4_coeff, A5_coeff, A6_coeff, P);
+                        
     auto sigma = mfem::GridFunction(&dg_tensor_space);
-    CalcFungCauchyStress(u, E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+    CalcFungCauchyStress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                             A4_coeff, A5_coeff, A6_coeff, sigma);
     
-    auto P = mfem::GridFunction(&dg_tensor_space);
-    CalcFungPK1Stress(u, E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
-                        A4_coeff, A5_coeff, A6_coeff, P);
-    
-    double free_energy = GetFungHelmholtzEnergy(E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+    double free_energy = GetFungHelmholtzEnergy(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                                                 A4_coeff, A5_coeff, A6_coeff);
 
     std::ofstream file(ResultFile);
@@ -125,8 +127,9 @@ int main(int argc, char** argv)
     mesh.PrintVTK(file, 0);
     u.SaveVTK(file, "u", 0);
     E.SaveVTK(file, "E", 0);
-    sigma.SaveVTK(file, "sigma", 0);
+    S.SaveVTK(file, "S", 0);
     P.SaveVTK(file, "P", 0);
+    sigma.SaveVTK(file, "sigma", 0);
     file.close();
 
     if (output_csv)

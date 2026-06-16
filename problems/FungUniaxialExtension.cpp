@@ -9,11 +9,11 @@ int main(int argc, char** argv)
     double a, A1, A2, A3, A4, A5, A6;
     
     // Right edge displacement
-    double u_mag;
+    double u_x;
     
     // I/O parameters
     std::string MeshFile, ResultFile;
-    int output_csv;
+    int output_csv, num_increments = 1;
 
     mfem::OptionsParser args(argc, argv);
     args.AddOption(&MeshFile, "-mf", "--MeshFile", "Mesh File");
@@ -25,7 +25,8 @@ int main(int argc, char** argv)
     args.AddOption(&A4, "-A4", "--A4", "A4");
     args.AddOption(&A5, "-A5", "--A5", "A5");
     args.AddOption(&A6, "-A6", "--A6", "A6");
-    args.AddOption(&u_mag, "-u", "--u", "Right Displacement");
+    args.AddOption(&u_x, "-u", "--u", "Right Displacement");
+    args.AddOption(&num_increments, "-i", "--increments", "Number of Load Increments");
     args.AddOption(&output_csv, "-o", "--output_csv", "Ouput the CSV Data Files");
     args.Parse();
     if (!args.Good())
@@ -81,13 +82,11 @@ int main(int argc, char** argv)
     ns.SetPrintLevel(0);
 
     u_space.GetEssentialTrueDofs(right, tmp_tdofs, 0); // Used in incrementation
-
-    // Number of increments depends on strain applied
-    int N_increments = static_cast<int>(std::abs(u_mag/0.0005)); 
-    for (int i=0; i<N_increments; i++)
+ 
+    for (int i=0; i<num_increments; i++)
     {
         //mfem::out << "Solving increment " << (i+1) << " out of " << N_increments << " \n";
-        u.SetSubVector(tmp_tdofs, (static_cast<double>(i+1)/N_increments)*u_mag);
+        u.SetSubVector(tmp_tdofs, (static_cast<double>(i+1)/num_increments)*u_x);
         ns.Mult(f, u);
     }
 
@@ -100,15 +99,19 @@ int main(int argc, char** argv)
     auto E = mfem::GridFunction(&dg_tensor_space);
     CalcGreenLagrangeStrain(u, E);
 
+    auto S = mfem::GridFunction(&dg_tensor_space);
+    CalcFungPK2Stress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+                        A4_coeff, A5_coeff, A6_coeff, S);
+
+    auto P = mfem::GridFunction(&dg_tensor_space);
+    CalcFungPK1Stress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+                        A4_coeff, A5_coeff, A6_coeff, P);
+                        
     auto sigma = mfem::GridFunction(&dg_tensor_space);
-    CalcFungCauchyStress(u, E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+    CalcFungCauchyStress(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                             A4_coeff, A5_coeff, A6_coeff, sigma);
     
-    auto P = mfem::GridFunction(&dg_tensor_space);
-    CalcFungPK1Stress(u, E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
-                        A4_coeff, A5_coeff, A6_coeff, P);
-    
-    double free_energy = GetFungHelmholtzEnergy(E, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
+    double free_energy = GetFungHelmholtzEnergy(u, a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                                                 A4_coeff, A5_coeff, A6_coeff);
 
     std::ofstream file(ResultFile);
@@ -116,8 +119,9 @@ int main(int argc, char** argv)
     mesh.PrintVTK(file, 0);
     u.SaveVTK(file, "u", 0);
     E.SaveVTK(file, "E", 0);
-    sigma.SaveVTK(file, "sigma", 0);
+    S.SaveVTK(file, "S", 0);
     P.SaveVTK(file, "P", 0);
+    sigma.SaveVTK(file, "sigma", 0);
     file.close();
 
     if (output_csv)
@@ -126,14 +130,14 @@ int main(int argc, char** argv)
         if (std::filesystem::exists(DOF_file_name)) 
         {
             std::ofstream DOF_file(DOF_file_name, std::ios::app);
-            DOF_file << u_mag << ", " << u.Size() << "\n";
+            DOF_file << u_x << ", " << u.Size() << "\n";
             DOF_file.close();
         } 
         else 
         {
             std::ofstream DOF_file(DOF_file_name);
             DOF_file << "# DOF counts\n";
-            DOF_file << u_mag << ", " << u.Size() << "\n";
+            DOF_file << u_x << ", " << u.Size() << "\n";
             DOF_file.close();
         }
 
@@ -141,14 +145,14 @@ int main(int argc, char** argv)
         if (std::filesystem::exists(solve_time_file_name)) 
         {
             std::ofstream solve_time_file(solve_time_file_name, std::ios::app);
-            solve_time_file << u_mag << ", " << elapsed.count() << "\n";
+            solve_time_file << u_x << ", " << elapsed.count() << "\n";
             solve_time_file.close();
         } 
         else 
         {
             std::ofstream solve_time_file(solve_time_file_name);
             solve_time_file << "# Solve times for each strain\n";
-            solve_time_file << u_mag << ", " << elapsed.count() << "\n";
+            solve_time_file << u_x << ", " << elapsed.count() << "\n";
             solve_time_file.close();
         }
         
@@ -156,14 +160,14 @@ int main(int argc, char** argv)
         if (std::filesystem::exists(free_energy_file_name))
         {
             std::ofstream free_energy_file(free_energy_file_name, std::ios::app);
-            free_energy_file << u_mag << ", " << free_energy << "\n";
+            free_energy_file << u_x << ", " << free_energy << "\n";
             free_energy_file.close();
         } 
         else 
         {
             std::ofstream free_energy_file(free_energy_file_name);
             free_energy_file << "# Total Helmholtz free energy for each strain\n";
-            free_energy_file << u_mag << ", " << free_energy << "\n";
+            free_energy_file << u_x << ", " << free_energy << "\n";
             free_energy_file.close();
         }
     }
