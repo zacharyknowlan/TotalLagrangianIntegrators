@@ -1,21 +1,18 @@
 import subprocess
 from pathlib import Path
-from SunSacksMeshes import L
 
 ResultDirectory = "../results/BiaxialExtension/"
 
-a = 5.12e3 # Pa
-A1 = 60.12
-A2 = 86.34
-A3 = 2.00
-A4 = 203.16
-A5 = 43.05
-A6 = 42.14
-E11 = [0.01*i for i in range(1,21)]
-E22 = [((strain + 0.04)/1.79) for strain in E11]
-u_x = [L*strain for strain in E11]
-u_y = [L*strain for strain in E22]
-increments = [int(10.*u/(L/100.)) for u in u_x]
+a = 4.80e3
+A1 = 64.99
+A2 = 43.55
+A3 = 1.67
+A4 = 2.47
+A5 = -5.25
+A6 = 2.46
+
+T = [50e3*i for i in range(1,21)]
+increments = [int(10*i) for i in range(1,len(T)+1)]
 
 def main():
 
@@ -29,8 +26,7 @@ def main():
     CommandLineInput.extend(["-A4", str(A4)])
     CommandLineInput.extend(["-A5", str(A5)])
     CommandLineInput.extend(["-A6", str(A6)])
-    CommandLineInput.extend(["-u_x", " "])
-    CommandLineInput.extend(["-u_y", " "])
+    CommandLineInput.extend(["-T", " "])
     CommandLineInput.extend(["-i", " "])
     CommandLineInput.extend(["-o", "1"])
 
@@ -44,11 +40,10 @@ def main():
     free_energy_filepath.unlink(missing_ok=True)
 
     processes = []
-    for i in range(0, len(E11)):
+    for i in range(0, len(T)):
         CommandLineInput[4] = str(ResultDirectory + "Fung_Biaxial_Result_" + str(i) + ".vtk")
-        CommandLineInput[20] = str(u_x[i])
-        CommandLineInput[22] = str(u_y[i])
-        CommandLineInput[24] = str(increments[i])
+        CommandLineInput[20] = str(T[i])
+        CommandLineInput[22] = str(increments[i])
         process = subprocess.Popen(CommandLineInput)
         processes.append(process)
 

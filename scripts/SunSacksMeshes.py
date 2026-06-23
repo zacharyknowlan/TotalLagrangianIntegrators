@@ -3,8 +3,8 @@ from numpy import sqrt
 
 L = 0.025
 cx, cy = L/2., L/2.
-r = L/5.
-NE = 1024
+r = 0.001
+NE = 2116
 tol = 1e-6 # For locating things in bounding box (do not make smaller)
 
 def main():
@@ -91,9 +91,6 @@ def main():
     for dim, tag in edges:
         xmin, ymin, zmin, xmax, ymax, zmax = gmsh.model.getBoundingBox(dim, tag)
 
-        com = gmsh.model.occ.getCenterOfMass(dim, tag)
-        dist = sqrt((com[0] - cx)**2 + (com[1] - cy)**2)
-
         if abs(xmin) < tol and abs(xmax) < tol:
             left.append(tag)
         elif abs(xmin - L) < tol and abs(xmax - L) < tol:
@@ -104,7 +101,7 @@ def main():
             top.append(tag)
         elif abs(ymin - cy) < tol and abs(ymax - cy) < tol and (xmax > (cx + r) or xmin < (cx - r)):
             centerline.append(tag)
-        elif abs(dist - r) < tol:
+        elif (abs(xmin-cx+r) < tol or abs(xmax-cx-r) < tol or abs(ymin-cy+r) < tol or abs(ymax-cy-r) < tol):
             inc.append(tag)
 
     gmsh.model.addPhysicalGroup(1, bottom, tag=1, name="Bottom")
@@ -115,8 +112,23 @@ def main():
     gmsh.model.addPhysicalGroup(1, inc, tag=6, name="Inclusion")
     gmsh.model.addPhysicalGroup(2, [s[1] for s in surfaces], tag=7, name="Domain")
 
-    gmsh.option.setNumber("Mesh.CharacteristicLengthMin", L/(2.*sqrt(NE)))
-    gmsh.option.setNumber("Mesh.CharacteristicLengthMax", L/sqrt(NE))
+    h_min = L/(20.*sqrt(NE))
+    h_max = L/(2.*sqrt(NE))
+
+    gmsh.model.mesh.field.add("Distance", 1)
+    gmsh.model.mesh.field.setNumbers(1, "CurvesList", inc)
+    gmsh.model.mesh.field.setNumber(1, "Sampling", 100)
+
+    gmsh.model.mesh.field.add("Threshold", 2)
+    gmsh.model.mesh.field.setNumber(2, "InField", 1)
+    gmsh.model.mesh.field.setNumber(2, "SizeMin", h_min)
+    gmsh.model.mesh.field.setNumber(2, "SizeMax", h_max)
+
+    gmsh.model.mesh.field.setNumber(2, "DistMin", 0.)
+    gmsh.model.mesh.field.setNumber(2, "DistMax", r)
+
+    gmsh.model.mesh.field.setAsBackgroundMesh(2)
+
     gmsh.option.setNumber("Mesh.ElementOrder", 1)
     gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
     gmsh.model.mesh.generate(dim=2)

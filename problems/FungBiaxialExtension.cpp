@@ -3,17 +3,46 @@
 #include <chrono>
 #include <filesystem>
 
+double T_mag = 1e6;
+
+void T_bottom_func(const mfem::Vector& x, double pseudo_time, mfem::Vector& T) 
+{
+    T.SetSize(2);
+    T[0] = 0.;
+    T[1] = -T_mag * pseudo_time;
+}
+
+void T_right_func(const mfem::Vector& x, double pseudo_time, mfem::Vector& T) 
+{
+    T.SetSize(2);
+    T[0] = T_mag * pseudo_time;
+    T[1] = 0.;
+}
+
+void T_top_func(const mfem::Vector& x, double pseudo_time, mfem::Vector& T) 
+{
+    T.SetSize(2);
+    T[0] = 0.;
+    T[1] = T_mag * pseudo_time;
+}
+
+void T_left_func(const mfem::Vector& x, double pseudo_time, mfem::Vector& T) 
+{
+    T.SetSize(2);
+    T[0] = -T_mag * pseudo_time;
+    T[1] = 0.;
+}
+
 int main(int argc, char** argv)
 {
     // Material parameters
     double a, A1, A2, A3, A4, A5, A6;
-
-    // Top and right displacement
-    double u_x = 0., u_y = 0.;
     
     // I/O parameters
     std::string MeshFile, ResultFile;
-    int output_csv, num_increments = 1;
+    int output_csv;
+    
+    int num_increments = 1; // Number of load increments
 
     mfem::OptionsParser args(argc, argv);
     args.AddOption(&MeshFile, "-mf", "--MeshFile", "Mesh File");
@@ -25,8 +54,7 @@ int main(int argc, char** argv)
     args.AddOption(&A4, "-A4", "--A4", "A4");
     args.AddOption(&A5, "-A5", "--A5", "A5");
     args.AddOption(&A6, "-A6", "--A6", "A6");
-    args.AddOption(&u_x, "-u_x", "--u_x", "Right Displacement");
-    args.AddOption(&u_y, "-u_y", "--u_y", "Top Displacement");
+    args.AddOption(&T_mag, "-T", "--T_mag", "TractionMagnitude");
     args.AddOption(&num_increments, "-i", "--increments", "Number of Load Increments");
     args.AddOption(&output_csv, "-o", "--output_csv", "Ouput the CSV Data Files");
     args.Parse();
@@ -57,28 +85,62 @@ int main(int argc, char** argv)
     auto A5_coeff = mfem::ConstantCoefficient(A5);
     auto A6_coeff = mfem::ConstantCoefficient(A6);
 
-    mfem::Array<int> ess_tdofs, tmp_tdofs, right_tdofs, top_tdofs;
+    mfem::Array<int> ess_tdofs, vdofs;
+    mfem::DenseMatrix coords;
+    double tol = 1e-6, L = 0.025;
+    for(int bdr_el=0; bdr_el<u_space.GetNBE(); bdr_el++)
+    {
+        const mfem::FiniteElement *BE = u_space.GetBE(bdr_el);
+        int dof = BE->GetDof();
+        
+        coords.SetSize(dim, dof);
+        coords = 0.;
+        
+        mfem::ElementTransformation *Tr = u_space.GetBdrElementTransformation(bdr_el);
+        const mfem::IntegrationRule nodes = BE->GetNodes(); 
+        Tr->Transform(nodes, coords);
+
+        vdofs.SetSize(dim*dof);
+        u_space.GetBdrElementVDofs(bdr_el, vdofs);
+
+        for(int i=0; i<dof; i++)
+        { 
+            if (abs(coords(0, i)) < tol && abs(coords(1, i)) < tol)
+            {
+                // Origin is fixed in both x and y
+                ess_tdofs.Append(vdofs[i]);
+                ess_tdofs.Append(vdofs[i+dof]);
+            }
+            else if (abs(coords(0, i) - L) < tol && abs(coords(1, i)) < tol)
+            {
+                // Fix bottom right corner y dof
+                ess_tdofs.Append(vdofs[i+dof]);
+            }
+            else if (abs(coords(0, i)) < tol && abs(coords(1, i) - L) < tol)
+            {
+                // Fix top left corner x dof
+                ess_tdofs.Append(vdofs[i]); 
+            }
+        }
+    }
 
     mfem::Array<int> bottom({1, 0, 0, 0, 0, 0});
     mfem::Array<int> right({0, 1, 0, 0, 0, 0});
     mfem::Array<int> top({0, 0, 1, 0, 0, 0});
     mfem::Array<int> left({0, 0, 0, 1, 0, 0});
 
-    u_space.GetEssentialTrueDofs(bottom, tmp_tdofs, 1);
-    ess_tdofs.Append(tmp_tdofs);
-    
-    u_space.GetEssentialTrueDofs(right, right_tdofs, 0);
-    ess_tdofs.Append(right_tdofs);
-
-    u_space.GetEssentialTrueDofs(top, top_tdofs, 1);
-    ess_tdofs.Append(top_tdofs);
-    
-    u_space.GetEssentialTrueDofs(left, tmp_tdofs, 0);
-    ess_tdofs.Append(tmp_tdofs);
+    auto T_bottom = mfem::VectorFunctionCoefficient(2, T_bottom_func);
+    auto T_right = mfem::VectorFunctionCoefficient(2, T_right_func);
+    auto T_top = mfem::VectorFunctionCoefficient(2, T_top_func);
+    auto T_left = mfem::VectorFunctionCoefficient(2, T_left_func);
 
     auto B = mfem::NonlinearForm(&u_space);
     B.AddDomainIntegrator(new FungExponentialIntegrator(a_coeff, A1_coeff, A2_coeff, A3_coeff, 
                                                         A4_coeff, A5_coeff, A6_coeff));
+    B.AddBoundaryIntegrator(new PK1TractionIntegrator(T_bottom), bottom);
+    B.AddBoundaryIntegrator(new PK1TractionIntegrator(T_right), right);
+    B.AddBoundaryIntegrator(new PK1TractionIntegrator(T_top), top);
+    B.AddBoundaryIntegrator(new PK1TractionIntegrator(T_left), left);
     B.SetEssentialTrueDofs(ess_tdofs);
 
     auto prec = mfem::UMFPackSolver();
@@ -93,8 +155,11 @@ int main(int argc, char** argv)
     for (int i=0; i<num_increments; i++)
     {
         //mfem::out << "Solving increment " << (i+1) << " out of " << N_increments << " \n";
-        u.SetSubVector(right_tdofs, (static_cast<double>(i+1)/num_increments)*u_x);
-        u.SetSubVector(top_tdofs, (static_cast<double>(i+1)/num_increments)*u_y);
+        double load_fraction = static_cast<double>(i+1)/num_increments;
+        T_bottom.SetTime(load_fraction);
+        T_right.SetTime(load_fraction);
+        T_top.SetTime(load_fraction);
+        T_left.SetTime(load_fraction);
         ns.Mult(f, u);
     }
 
@@ -138,14 +203,14 @@ int main(int argc, char** argv)
         if (std::filesystem::exists(DOF_file_name)) 
         {
             std::ofstream DOF_file(DOF_file_name, std::ios::app);
-            DOF_file << u_x << ", " << u_y << ", " << u.Size() << "\n";
+            DOF_file << T_mag << ", " << u.Size() << "\n";
             DOF_file.close();
         } 
         else 
         {
             std::ofstream DOF_file(DOF_file_name);
             DOF_file << "# DOF counts\n";
-            DOF_file << u_x << ", " << u_y << ", " << u.Size() << "\n";
+            DOF_file << T_mag << ", " << u.Size() << "\n";
             DOF_file.close();
         }
 
@@ -153,14 +218,14 @@ int main(int argc, char** argv)
         if (std::filesystem::exists(solve_time_file_name)) 
         {
             std::ofstream solve_time_file(solve_time_file_name, std::ios::app);
-            solve_time_file << u_x << ", " << u_y << ", " << elapsed.count() << "\n";
+            solve_time_file << T_mag << ", " << elapsed.count() << "\n";
             solve_time_file.close();
         } 
         else 
         {
             std::ofstream solve_time_file(solve_time_file_name);
             solve_time_file << "# Solve times for each strain\n";
-            solve_time_file << u_x << ", " << u_y << ", " << elapsed.count() << "\n";
+            solve_time_file << T_mag << ", " << elapsed.count() << "\n";
             solve_time_file.close();
         }
         
@@ -168,14 +233,14 @@ int main(int argc, char** argv)
         if (std::filesystem::exists(free_energy_file_name))
         {
             std::ofstream free_energy_file(free_energy_file_name, std::ios::app);
-            free_energy_file << u_x << ", " << u_y << ", " << free_energy << "\n";
+            free_energy_file << T_mag << ", " << free_energy << "\n";
             free_energy_file.close();
         } 
         else 
         {
             std::ofstream free_energy_file(free_energy_file_name);
             free_energy_file << "# Total Helmholtz free energy for each strain\n";
-            free_energy_file << u_x << ", " << u_y << ", " << free_energy << "\n";
+            free_energy_file << T_mag << ", " << free_energy << "\n";
             free_energy_file.close();
         }
     }
